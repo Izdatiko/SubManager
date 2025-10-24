@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for Telegram users
+model User {
+  id        Int      @id @default(autoincrement())
+  telegramId BigInt  @unique
+  username  String?
+  firstName String?
+  lastName  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdRooms Room[] @relation("RoomCreator")
+  roomMemberships RoomMember[]
+  payments Payment[]
+
+  @@map("users")
+}
+
+// Subscription rooms
+model Room {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // Уникальный код комнаты
+  name        String   // Название подписки/сервиса
+  description String?  // Описание подписки
+  totalAmount Decimal  @db.Decimal(10, 2) // Общая сумма подписки
+  currency    String   @default("RUB") // Валюта
+  paymentDay  Int      // День месяца для оплаты (1-31)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  creatorId Int
+  creator   User @relation("RoomCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members   RoomMember[]
+  payments  Payment[]
+
+  @@map("rooms")
+}
+
+// Room members (участники комнаты)
+model RoomMember {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  roomId    Int
+  joinedAt  DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+  @@map("room_members")
+}
+
+// Payment records (записи об оплатах)
+model Payment {
+  id             Int      @id @default(autoincrement())
+  userId         Int      // Кто оплатил
+  roomId         Int      // В какой комнате
+  amount         Decimal  @db.Decimal(10, 2)
+  currency       String   @default("RUB")
+  status         PaymentStatus @default(PENDING)
+  paymentDate    DateTime? // Дата когда оплатил
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// Payment status enum
+enum PaymentStatus {
+  PENDING    // Ожидает оплаты
+  PAID       // Оплачено
+  CONFIRMED  // Подтверждено создателем комнаты
+  OVERDUE    // Просрочено
+}
